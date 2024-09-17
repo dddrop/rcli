@@ -3,6 +3,7 @@ use clap::Parser;
 use csv::Reader;
 use serde::{Deserialize, Serialize};
 use anyhow::Result;
+use serde_json::Value;
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "PascalCase")]
@@ -46,22 +47,7 @@ struct CsvOpts {
 fn main() -> anyhow::Result<()> {
     let opts: Opts = Opts::parse();
     match opts.cmd {
-        SubCommand::Csv(opts) => {
-            let mut reader = Reader::from_path(opts.input)?;
-            // let records = reader
-            //     .deserialize()
-            //     .map(|record| record.unwrap())
-            //     .collect::<Vec<Player>>();
-            // println!("{:?}", records);
-            let mut ret = Vec::with_capacity(128);
-            for result in reader.deserialize() {
-                let record: Player = result?;
-                ret.push(record);
-            }
-            let json = serde_json::to_string_pretty(&ret)?;
-            fs::write(opts.output, json)?;
-            Ok(())
-        }
+        SubCommand::Csv(opts) => process_csv(opts.input.as_str(), opts.output.as_str())
     }
 }
 
@@ -71,4 +57,18 @@ fn verify_input_file(file_name: &str) -> Result<String, String> {
     } else {
         Err(format!("File not found: {}", file_name))
     }
+}
+
+fn process_csv(input: &str, output: &str) -> Result<()> {
+    let mut reader = Reader::from_path(input)?;
+    let mut ret = Vec::with_capacity(128);
+    let headers = reader.headers()?.clone();
+    for result in reader.records() {
+        let record = result?;
+        let json_value = headers.iter().zip(record.iter()).collect::<Value>();
+        ret.push(json_value);
+    }
+    let json = serde_json::to_string_pretty(&ret)?;
+    fs::write(output, json)?;
+    Ok(())
 }
