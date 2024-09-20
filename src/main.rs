@@ -53,7 +53,6 @@ struct CsvOpts {
 enum OutputFormat {
     Json,
     Yaml,
-    Toml,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -66,7 +65,7 @@ fn main() -> anyhow::Result<()> {
                 format!("output.{}", opts.format)
             };
             process_csv(&opts.input, output, opts.format)
-        },
+        }
     }
 }
 
@@ -84,11 +83,15 @@ fn process_csv(input: &str, output: String, format: OutputFormat) -> Result<()> 
     let headers = reader.headers()?.clone();
     for result in reader.records() {
         let record = result?;
-        let json_value = headers.iter().zip(record.iter()).collect::<Value>();
-        ret.push(json_value);
+        let value = headers.iter().zip(record.iter()).collect::<Value>();
+        ret.push(value);
     }
-    let json = serde_json::to_string_pretty(&ret)?;
-    fs::write(output, json)?;
+    let content = match format {
+        OutputFormat::Json => serde_json::to_string_pretty(&ret)?,
+        OutputFormat::Yaml => serde_yaml::to_string(&ret)?,
+    };
+
+    fs::write(output, content)?;
     Ok(())
 }
 
@@ -100,7 +103,6 @@ impl From<OutputFormat> for &'static str {
     fn from(value: OutputFormat) -> Self {
         match value {
             OutputFormat::Json => "json",
-            OutputFormat::Toml => "toml",
             OutputFormat::Yaml => "yaml",
         }
     }
@@ -113,7 +115,6 @@ impl FromStr for OutputFormat {
         match s.to_lowercase().as_str() {
             "json" => Ok(OutputFormat::Json),
             "yaml" => Ok(OutputFormat::Yaml),
-            "toml" => Ok(OutputFormat::Toml),
             _ => anyhow::bail!("Unrecognized format: {}", s),
         }
     }
@@ -121,6 +122,6 @@ impl FromStr for OutputFormat {
 
 impl Display for OutputFormat {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", Into::<&'static str>::into(*self))
+        write!(f, "{}", Into::<&str>::into(*self))
     }
 }
